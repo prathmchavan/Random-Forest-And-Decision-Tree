@@ -4,12 +4,15 @@ import pickle
 import numpy as np
 import os 
 import pandas as pd
+from tensorflow.keras.models import load_model
 
 # Initialize FastAPI app
 app = FastAPI()
 
 BASE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 
+# Path to the deep neural network model
+dnn_model_path = os.path.join(BASE_DIR, "models", "dnn_model.keras")
 # Paths to models
 rf_model_path = os.path.join(BASE_DIR, "models", "random_forest_model.pkl")
 scaler_path = os.path.join(BASE_DIR, "models", "scaler.pkl")
@@ -26,9 +29,10 @@ try:
         decision_tree_model = pickle.load(dt_file)
     with open(scaler_path, "rb") as scaler_file:
         scaler = pickle.load(scaler_file)
-        
-    print("Random Forest Model loaded:", random_forest_model)
-    print("Decision Tree Model loaded:", decision_tree_model)
+    
+    dnn_model = load_model(dnn_model_path)
+    # print("Random Forest Model loaded:", random_forest_model)
+    # print("Decision Tree Model loaded:", decision_tree_model)
 except Exception as e:
     raise RuntimeError(f"Error loading models: {str(e)}")
 # Define input structure
@@ -76,6 +80,20 @@ feature_columns = [
 #     "feature_vector": ["30", "1800", "2400", "17", "1", "0", "35", "0.055555556", "0.0560000017", "11.529999733", "0.6600000262", "0.5559999943", "0.1669999957", "0", "0", "0.004865", "569.24871826"]
 # }
 
+
+@app.post("/predict/dnn")
+async def predict_dnn(data: PredictionInput):
+    try:
+        feature_vector = np.array(data.feature_vector)
+
+        input_data = feature_vector.reshape(1, -1)
+
+        prediction = np.round(dnn_model.predict(input_data).tolist()[0][0], 0)
+        return {"prediction": prediction}
+    except ValueError as ve:
+        raise HTTPException(status_code=422, detail=str(ve))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @app.post("/predict/random-forest")
@@ -128,4 +146,4 @@ async def predict_decision_tree(data: PredictionInput):
 
 @app.get("/")
 async def root():
-    return {"message": "Welcome to the ML API! Use /predict/random-forest or /predict/decision-tree."}
+    return {"message": "Welcome to the ML API! 1) Use /predict/random-forest 2) /predict/decision-tree 3) Use /predict/dnn to make predictions."}
